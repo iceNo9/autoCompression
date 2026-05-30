@@ -6,6 +6,17 @@ from tkinter import filedialog
 import sys
 import time
 
+# 版本号
+VERSION = "1.0.0"  # 发布时自动更新
+
+def show_version():
+    """显示版本信息"""
+    print(f"autoCompression 版本 {VERSION}")
+    print("自动选择压缩等级的 ZIP 压缩工具")
+    print("压缩逻辑：先用 mx=5 压缩，压缩率 >80% 则改用 mx=0")
+    print("GitHub: https://github.com/your-repo/autoCompression")
+    sys.exit(0)
+
 def normalize_path(path):
     """规范化路径：去除引号，处理相对路径，转换为绝对路径"""
     # 去除首尾的引号（单引号或双引号）
@@ -152,17 +163,29 @@ def get_folder_name_from_path(folder_path):
     return folder_name
 
 def main():
+    # 检查版本参数
+    if len(sys.argv) >= 2:
+        arg = sys.argv[1].lower()
+        if arg in ['-v', '--version', '/v', '/version']:
+            show_version()
+    
+    # 检查参数数量
     if len(sys.argv) != 2:
         print("使用方法: python main.py <目录路径>")
-        print("示例: python main.py \"C:\\MyFolder\"")
-        print("示例: python main.py \"M:\\美少女万华镜 -理与迷宫的少女-\"")
-        print("示例: python main.py .\\MyFolder")
+        print("或: python main.py -v 查看版本")
+        print("\n示例:")
+        print("  python main.py \"C:\\MyFolder\"")
+        print("  python main.py \"M:\\美少女万华镜 -理与迷宫的少女-\"")
+        print("  python main.py .")
+        print("  python main.py ..")
+        print("  python main.py -v")
         input("\n按回车键退出...")
         sys.exit(1)
     
     # 获取并规范化路径
     source_dir = normalize_path(sys.argv[1])
     
+    print(f"📦 autoCompression 版本 {VERSION}")
     print(f"📁 解析后的路径: {source_dir}")
     
     if not os.path.isdir(source_dir):
