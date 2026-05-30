@@ -37,32 +37,37 @@ jobs:
           else
             VERSION="${{ github.ref_name }}"
           fi
+          # 移除版本号前的 'v' 前缀（可选）
+          VERSION_NUM=${VERSION#v}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_num=$VERSION_NUM" >> $GITHUB_OUTPUT
           echo "VERSION=$VERSION" >> $GITHUB_ENV
       
       - name: Build with PyInstaller
         run: |
-          pyinstaller --onefile --name "autoCompression" --add-data "7z;7z" --console main.py
+          set VERSION=${{ steps.get_version.outputs.version_num }}
           
-          mkdir autoCompression
-          copy dist\autoCompression.exe autoCompression\
-          if exist 7z xcopy /E /I 7z autoCompression\7z\
+          pyinstaller --onefile --name "autoCompression-%VERSION%" --add-data "7z;7z" --console main.py
           
-          powershell Compress-Archive -Path autoCompression\* -DestinationPath autoCompression.zip -Force
+          mkdir autoCompression-%VERSION%
+          copy dist\autoCompression-%VERSION%.exe autoCompression-%VERSION%\
+          if exist 7z xcopy /E /I 7z autoCompression-%VERSION%\7z\
+          
+          powershell Compress-Archive -Path autoCompression-%VERSION%\* -DestinationPath autoCompression-%VERSION%.zip -Force
         shell: cmd
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: autoCompression
-          path: autoCompression.zip
+          name: autoCompression-${{ steps.get_version.outputs.version_num }}
+          path: autoCompression-${{ steps.get_version.outputs.version_num }}.zip
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.get_version.outputs.version }}
           name: Release ${{ steps.get_version.outputs.version }}
-          files: autoCompression.zip
+          files: autoCompression-${{ steps.get_version.outputs.version_num }}.zip
           overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
