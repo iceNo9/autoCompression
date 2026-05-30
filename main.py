@@ -10,13 +10,32 @@ import time
 COMPRESSION_RATIO_THRESHOLD = 80  # 可调整的宏变量
 
 def get_7z_path():
-    """获取脚本所在目录下的7z文件夹中的7z.exe路径"""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    """获取脚本所在目录下的7z文件夹中的7z.exe路径（支持PyInstaller打包）"""
     
+    # 判断是否为打包后的exe运行
+    if getattr(sys, 'frozen', False):
+        # 打包后的exe运行，exe所在目录
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        # 正常Python脚本运行
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # 尝试多个可能的位置
     local_paths = [
-        os.path.join(script_dir, "7z", "7z.exe"),
-        os.path.join(script_dir, "7z.exe"),
+        os.path.join(base_dir, "7z", "7z.exe"),
+        os.path.join(base_dir, "7z.exe"),
+        # 如果exe在子目录，向上查找
+        os.path.join(os.path.dirname(base_dir), "7z", "7z.exe"),
+        os.path.join(os.path.dirname(base_dir), "7z.exe"),
     ]
+    
+    # 打包后的临时目录（PyInstaller）
+    if getattr(sys, 'frozen', False):
+        temp_paths = [
+            os.path.join(sys._MEIPASS, "7z", "7z.exe"),
+            os.path.join(sys._MEIPASS, "7z.exe"),
+        ]
+        local_paths.extend(temp_paths)
     
     for path in local_paths:
         if os.path.exists(path):
