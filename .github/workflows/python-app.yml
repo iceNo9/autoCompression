@@ -37,24 +37,39 @@ jobs:
           else
             VERSION="${{ github.ref_name }}"
           fi
-          # 移除版本号前的 'v' 前缀（可选）
           VERSION_NUM=${VERSION#v}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "version_num=$VERSION_NUM" >> $GITHUB_OUTPUT
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+      
+      - name: Update version in main.py
+        shell: pwsh
+        run: |
+          $VERSION_NUM = "${{ steps.get_version.outputs.version_num }}"
+          $FILE = "main.py"
+          if (Test-Path $FILE) {
+            $content = Get-Content $FILE -Raw
+            $content = $content -replace 'VERSION = ".*"', "VERSION = `"$VERSION_NUM`""
+            Set-Content $FILE -Value $content -NoNewline
+            Write-Host "Updated version to $VERSION_NUM"
+          }
       
       - name: Build with PyInstaller
+        shell: pwsh
         run: |
-          set VERSION=${{ steps.get_version.outputs.version_num }}
+          $VERSION_NUM = "${{ steps.get_version.outputs.version_num }}"
+          $FOLDER_NAME = "autoCompression-$VERSION_NUM"
+          $ZIP_NAME = "autoCompression-$VERSION_NUM.zip"
           
-          pyinstaller --onefile --name "autoCompression-%VERSION%" --add-data "7z;7z" --console main.py
+          pyinstaller --onefile --name "autoCompression" --add-data "7z;7z" --console main.py
           
-          mkdir autoCompression-%VERSION%
-          copy dist\autoCompression-%VERSION%.exe autoCompression-%VERSION%\
-          if exist 7z xcopy /E /I 7z autoCompression-%VERSION%\7z\
+          New-Item -ItemType Directory -Force -Path $FOLDER_NAME
+          Copy-Item "dist\autoCompression.exe" -Destination "$FOLDER_NAME\"
           
-          powershell Compress-Archive -Path autoCompression-%VERSION%\* -DestinationPath autoCompression-%VERSION%.zip -Force
-        shell: cmd
+          if (Test-Path "7z") {
+            Copy-Item -Path "7z\*" -Destination "$FOLDER_NAME\7z\" -Recurse -Force
+          }
+          
+          Compress-Archive -Path "$FOLDER_NAME\*" -DestinationPath $ZIP_NAME -Force
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
