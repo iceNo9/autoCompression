@@ -6,36 +6,33 @@ from tkinter import filedialog
 import sys
 import time
 
-# 压缩率阈值，超过此值说明文件已经很难压缩，改用仅存储模式
-COMPRESSION_RATIO_THRESHOLD = 80  # 可调整的宏变量
+def normalize_path(path):
+    """规范化路径：去除引号，处理相对路径，转换为绝对路径"""
+    # 去除首尾的引号（单引号或双引号）
+    path = path.strip('"').strip("'")
+    
+    # 处理 . 和 .. 相对路径
+    if path in ['.', '.\\', './']:
+        path = os.getcwd()  # 当前工作目录
+    elif path in ['..', '..\\', '../']:
+        path = os.path.dirname(os.getcwd())  # 上级目录
+    else:
+        # 转换为绝对路径
+        path = os.path.abspath(path)
+    
+    return path
+
+# 压缩率阈值
+COMPRESSION_RATIO_THRESHOLD = 80
 
 def get_7z_path():
-    """获取脚本所在目录下的7z文件夹中的7z.exe路径（支持PyInstaller打包）"""
+    """获取脚本所在目录下的7z文件夹中的7z.exe路径"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
     
-    # 判断是否为打包后的exe运行
-    if getattr(sys, 'frozen', False):
-        # 打包后的exe运行，exe所在目录
-        base_dir = os.path.dirname(sys.executable)
-    else:
-        # 正常Python脚本运行
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    # 尝试多个可能的位置
     local_paths = [
-        os.path.join(base_dir, "7z", "7z.exe"),
-        os.path.join(base_dir, "7z.exe"),
-        # 如果exe在子目录，向上查找
-        os.path.join(os.path.dirname(base_dir), "7z", "7z.exe"),
-        os.path.join(os.path.dirname(base_dir), "7z.exe"),
+        os.path.join(script_dir, "7z", "7z.exe"),
+        os.path.join(script_dir, "7z.exe"),
     ]
-    
-    # 打包后的临时目录（PyInstaller）
-    if getattr(sys, 'frozen', False):
-        temp_paths = [
-            os.path.join(sys._MEIPASS, "7z", "7z.exe"),
-            os.path.join(sys._MEIPASS, "7z.exe"),
-        ]
-        local_paths.extend(temp_paths)
     
     for path in local_paths:
         if os.path.exists(path):
@@ -57,7 +54,7 @@ def get_folder_size(folder_path):
     return total_size
 
 def compress_folder(folder_path, output_path, compression_level):
-    """压缩文件夹，返回是否成功和压缩后的文件大小，直接显示7z原始输出"""
+    """压缩文件夹，返回是否成功和压缩后的文件大小，实时显示进度"""
     seven_zip = get_7z_path()
     if not seven_zip:
         return False, 0, "未找到7z.exe"
@@ -70,7 +67,6 @@ def compress_folder(folder_path, output_path, compression_level):
     }.get(compression_level, f"mx={compression_level}")
     
     print(f"\n🚀 开始压缩 (mx={compression_level} - {level_name})...")
-    print("-" * 60)
     
     cmd = [
         seven_zip, "a",
@@ -81,16 +77,33 @@ def compress_folder(folder_path, output_path, compression_level):
         folder_path
     ]
     
-    # 直接输出到控制台，不做任何处理
     process = subprocess.Popen(
         cmd,
-        stdout=None,  # 直接输出到父进程的标准输出
-        stderr=None,  # 直接输出到父进程的标准错误
-        shell=False
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding='utf-8',
+        errors='ignore'
     )
     
+    last_percent = 0
+    for line in process.stdout:
+        line = line.strip()
+        if not line:
+            continue
+        
+        percent_match = re.search(r'(\d+)%', line)
+        if percent_match:
+            percent = int(percent_match.group(1))
+            if percent != last_percent:
+                bar_length = 40
+                filled = int(bar_length * percent / 100)
+                bar = '█' * filled + '░' * (bar_length - filled)
+                print(f"\r📦 压缩进度: [{bar}] {percent}%", end='', flush=True)
+                last_percent = percent
+    
+    print()
     process.wait()
-    print("-" * 60)
     
     if process.returncode == 0 and os.path.exists(output_path):
         compressed_size = os.path.getsize(output_path)
@@ -142,10 +155,15 @@ def main():
     if len(sys.argv) != 2:
         print("使用方法: python main.py <目录路径>")
         print("示例: python main.py \"C:\\MyFolder\"")
+        print("示例: python main.py \"M:\\美少女万华镜 -理与迷宫的少女-\"")
+        print("示例: python main.py .\\MyFolder")
         input("\n按回车键退出...")
         sys.exit(1)
     
-    source_dir = sys.argv[1]
+    # 获取并规范化路径
+    source_dir = normalize_path(sys.argv[1])
+    
+    print(f"📁 解析后的路径: {source_dir}")
     
     if not os.path.isdir(source_dir):
         print(f"❌ 错误: 目录不存在 - {source_dir}")
@@ -182,7 +200,6 @@ def main():
     
     print(f"💾 输出文件: {output_path}")
     
-    # 第一次压缩
     start_time = time.time()
     success, compressed_size, error = compress_folder(source_dir, output_path, compression_level=5)
     
@@ -202,7 +219,6 @@ def main():
     print(f"   耗时: {elapsed:.1f} 秒")
     print("=" * 50)
     
-    # 判断是否需要重新压缩
     if compression_ratio > COMPRESSION_RATIO_THRESHOLD:
         print(f"\n⚠️ 压缩率 {compression_ratio:.1f}% > {COMPRESSION_RATIO_THRESHOLD}%")
         print(f"   说明文件已经高度压缩，改用仅存储模式...")
@@ -238,5 +254,7 @@ def main():
     print(f"📊 最终大小: {format_size(compressed_size)}")
     print(f"⚙️ 使用等级: mx={final_level}" + (" (仅存储)" if final_level == 0 else " (标准压缩)"))
     
+    input("\n按回车键退出...")
+
 if __name__ == "__main__":
     main()
