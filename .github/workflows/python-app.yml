@@ -66,10 +66,15 @@ jobs:
           Copy-Item "dist\autoCompression.exe" -Destination "$FOLDER_NAME\"
           
           if (Test-Path "7z") {
+            New-Item -ItemType Directory -Force -Path "$FOLDER_NAME\7z"
             Copy-Item -Path "7z\*" -Destination "$FOLDER_NAME\7z\" -Recurse -Force
+            Write-Host "Copied 7z folder"
+          } else {
+            Write-Host "No 7z folder found, skipping"
           }
           
           Compress-Archive -Path "$FOLDER_NAME\*" -DestinationPath $ZIP_NAME -Force
+          Write-Host "Created $ZIP_NAME"
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
